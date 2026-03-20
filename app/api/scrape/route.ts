@@ -1,57 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Hyperbrowser } from "@hyperbrowser/sdk";
+import Hyperbrowser from "@hyperbrowser/sdk";
+import { Readability } from "@mozilla/readability";
+import { JSDOM } from "jsdom";
+import TurndownService from "turndown";
 
-export async function POST(request: NextRequest) {
+const client = new Hyperbrowser({ apiKey: process.env.HYPERBROWSER_API_KEY! });
+
+// Domains where plain fetch is sufficient (saves credits)
+const STATIC_DOMAINS = [
+  "wikipedia.org", "github.com", "developer.mozilla.org",
+  "docs.cloudflare.com", "nextjs.org", "supabase.com",
+  "arxiv.org", "dev.to", "medium.com",
+];
+
+export async function POST(req: NextRequest) {
+  const { url } = await req.json();
+  if (!url) return NextResponse.json({ error: "url required" }, { status: 400 });
+
+  const isStatic = STATIC_DOMAINS.some((d) => url.includes(d));
+
+  // Fast path: plain fetch + Readability (free, no credits)
+  if (isStatic) {
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; ResearchBot/1.0)" },
+      });
+      const html = await res.text();
+      const dom = new JSDOM(html, { url });
+      const article = new Readability(dom.window.document).parse();
+      const td = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" });
+      const markdown = td.turndown(article?.content ?? html);
+      return NextResponse.json({ markdown, title: article?.title ?? url, url });
+    } catch {
+      // Fall through to Hyperbrowser if plain fetch fails
+    }
+  }
+
+  // Hyperbrowser path (JS-heavy pages, dynamic content)
   try {
-    const { url } = await request.json();
-    
-    if (!url) {
-      return NextResponse.json(
-        { error: "URL is required" },
-        { status: 400 }
-      );
-    }
-
-    const apiKey = process.env.HYPERBROWSER_API_KEY;
-    
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "Hyperbrowser API key is missing" },
-        { status: 500 }
-      );
-    }
-
-    const client = new Hyperbrowser({ apiKey });
-
-    const scrapeResult = await client.scrape.startAndWait({
-      url,
-      sessionOptions: {
-        useProxy: true,
-        solveCaptchas: true,
-        proxyCountry: "US",
-      },
-    });
-
-    // Extract data from the result
-    const data = scrapeResult.data as any;
-    const title = data?.metadata?.title || new URL(url).hostname;
-    const content = data?.markdown || data?.text || "";
-    const text = data?.text || data?.markdown || "";
-
+    const result = await client.scrape.startAndWait({ url, scrapeOptions: { timeout: 15000 } });
     return NextResponse.json({
-      title,
-      content,
-      text,
+      markdown: result.data?.markdown ?? result.data?.html ?? "",
+      title: result.data?.metadata?.title ?? url,
       url,
     });
-  } catch (error) {
-    console.error("[Scrape] Error:", error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Unknown error occurred",
-      },
-      { status: 500 }
-    );
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

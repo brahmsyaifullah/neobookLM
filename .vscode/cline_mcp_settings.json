@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "hyperbooklm": {
+      "url": "https://hyperbooklm-mcp.<your-subdomain>.workers.dev/mcp",
+      "callUrl": "https://hyperbooklm-mcp.<your-subdomain>.workers.dev/mcp/call",
+      "name": "HyperbookLM Knowledge Base",
+      "description": "Team research knowledge base — coding references, docs, best practices"
+    }
+  }
+}

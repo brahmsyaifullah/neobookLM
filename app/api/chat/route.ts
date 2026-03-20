@@ -1,67 +1,54 @@
-import { OpenAI } from "openai";
 import { NextRequest, NextResponse } from "next/server";
+import { geminiFlash, geminiPro, embedText } from "@/lib/gemini";
+import { supabase } from "@/lib/supabase";
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
+  const { message, topicId, useProModel = false } = await req.json();
+
+  if (!message || !topicId) {
+    return NextResponse.json({ error: "message and topicId required" }, { status: 400 });
+  }
+
   try {
-    const { messages, context } = await request.json();
+    // 1. Embed the user's query
+    const queryEmbedding = await embedText(message);
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "OpenAI API key is missing" },
-        { status: 500 }
-      );
-    }
-
-    const openai = new OpenAI({ apiKey });
-
-    const systemPrompt = `
-You are HyperbookLM, an advanced research assistant.
-You have access to the following source context:
-${context || "No specific source context provided."}
-
-Answer the user's questions based on this context. 
-If the context is irrelevant, answer from your general knowledge but mention that it's outside the provided sources.
-Be concise, helpful, and professional.
-`;
-
-    // Use gpt-5-nano with full model identifier
-    const model = "gpt-5-nano-2025-08-07";
-
-    const stream = await openai.chat.completions.create({
-      model: model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages,
-      ],
-      stream: true,
+    // 2. Retrieve top-k relevant chunks via RPC
+    const { data: chunks, error } = await supabase.rpc("match_documents", {
+      query_embedding: queryEmbedding,
+      filter_topic_id: topicId,
+      match_count: 8,
+      match_threshold: 0.5,
     });
 
-    // Create a ReadableStream from the OpenAI stream
-    const readableStream = new ReadableStream({
-      async start(controller) {
-        for await (const chunk of stream) {
-          const content = chunk.choices[0]?.delta?.content || "";
-          if (content) {
-            controller.enqueue(new TextEncoder().encode(content));
-          }
-        }
-        controller.close();
-      },
+    if (error) throw error;
+
+    // 3. Build context string from chunks
+    const context = chunks
+      ?.map((c: any, i: number) =>
+        `[Source ${i + 1}: ${c.metadata?.title ?? c.source_url}]\n${c.content}`
+      )
+      .join("\n\n---\n\n") ?? "No relevant context found.";
+
+    // 4. Build system prompt
+    const systemPrompt = `You are a research assistant. Answer the user's question based ONLY on the provided context below.
+Always cite which source you're drawing from. If the context doesn't contain enough information, say so clearly.
+
+CONTEXT:
+${context}`;
+
+    // 5. Call Gemini
+    const model = useProModel ? geminiPro : geminiFlash;
+    const result = await model.generateContent({
+      systemInstruction: systemPrompt,
+      contents: [{ role: "user", parts: [{ text: message }] }],
     });
 
-    return new NextResponse(readableStream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      },
-    });
-  } catch (error) {
-    console.error("[Chat] Error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+    const answer = result.response.text();
+    const sources = [...new Set(chunks?.map((c: any) => c.source_url) ?? [])];
+
+    return NextResponse.json({ answer, sources });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
