@@ -24,8 +24,7 @@ A powerful research assistant built with Next.js 15, React 19, and Hyperbrowser.
 - **UI Library**: React 19, Tailwind CSS, shadcn/ui, Framer Motion
 - **Web Scraping**: [Hyperbrowser SDK](https://hyperbrowser.ai)
 - **AI Models**: 
-  - **OpenAI**: `gpt-5-nano` (Chat), `gpt-4o-mini` (Summary, Mindmap)
-  - **Google Gemini**: `gemini-3-pro-image-preview` (Slides)
+  - **Google Gemini**: `gemini-3.1-flash-preview` (Chat, Summary, Mindmap), `gemini-3.1-flash-image-preview` (Slides)
   - **ElevenLabs**: `eleven_turbo_v2_5` (Audio)
 - **Visualization**: React Flow (Mindmaps)
 - **PDF Processing**: `unpdf`
@@ -37,9 +36,8 @@ A powerful research assistant built with Next.js 15, React 19, and Hyperbrowser.
 You'll need API keys for the following services:
 
 1. **Hyperbrowser** - [Get API Key](https://hyperbrowser.ai) (Required for web scraping)
-2. **OpenAI** - [Get API Key](https://platform.openai.com) (Required for Chat, Summary, Mindmap)
-3. **Google Gemini** - [Get API Key](https://ai.google.dev) (Required for Slides)
-4. **ElevenLabs** - [Get API Key](https://elevenlabs.io) (Optional, for Audio)
+2. **Google Gemini** - [Get API Key](https://ai.google.dev) (Required for Chat, Summary, Mindmap, Slides)
+3. **ElevenLabs** - [Get API Key](https://elevenlabs.io) (Optional, for Audio)
 
 ### Installation
 
@@ -66,9 +64,6 @@ You'll need API keys for the following services:
    ```env
    # Hyperbrowser API Key
    HYPERBROWSER_API_KEY=your_hyperbrowser_key
-
-   # OpenAI API Key
-   OPENAI_API_KEY=your_openai_key
 
    # Google Gemini API Key
    GEMINI_API_KEY=your_gemini_key
@@ -100,9 +95,9 @@ hyperbooklm/
 ├── app/
 │   ├── api/                # Next.js API Routes (Server-side)
 │   │   ├── audio/          # ElevenLabs integration
-│   │   ├── chat/           # OpenAI Chat integration
+│   │   ├── chat/           # Gemini Chat integration
 │   │   ├── gemini/slides/  # Google Gemini Slides generation
-│   │   ├── gpt/mindmap/    # OpenAI Mindmap generation
+│   │   ├── gpt/mindmap/    # Gemini Mindmap generation
 │   │   ├── scrape/         # Hyperbrowser Scraping
 │   │   ├── summary/        # Research Summary generation
 │   │   └── upload/         # PDF/TXT File processing
