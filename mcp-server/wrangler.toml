@@ -1,0 +1,10 @@
+name = "hyperbooklm-mcp"
+main = "src/index.ts"
+compatibility_date = "2024-09-01"
+
+[vars]
+SUPABASE_URL = ""
+
+# Set secrets via CLI:
+# wrangler secret put GEMINI_API_KEY
+# wrangler secret put SUPABASE_SERVICE_KEY
