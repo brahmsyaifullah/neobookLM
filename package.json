@@ -26,7 +26,7 @@
     "framer-motion": "^12.23.26",
     "jsdom": "^29.0.1",
     "lucide-react": "^0.462.0",
-    "next": "15.1.0",
+    "next": "^15.5.14",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "reactflow": "^11.11.4",
