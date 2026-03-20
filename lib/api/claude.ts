@@ -1,7 +1,5 @@
 import { Source } from "../types";
-
-const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-const MODEL = process.env.OPENAI_SUMMARY_MODEL || "gpt-5-nano";
+import { geminiFlash } from "../gemini";
 
 interface StreamCallbacks {
   onStart?: () => void;
@@ -15,16 +13,6 @@ export async function streamChatCompletion(
   sources: Source[],
   callbacks: StreamCallbacks
 ): Promise<void> {
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    const error = new Error(
-      "OpenAI API key is missing. Please set OPENAI_API_KEY in your .env.local file."
-    );
-    callbacks.onError?.(error);
-    throw error;
-  }
-
   const sourcesContext = sources
     .map((source, index) => {
       const body = source.content ?? source.text ?? "";
@@ -50,64 +38,16 @@ ${sourcesContext}`;
   try {
     callbacks.onStart?.();
 
-    const response = await fetch(OPENAI_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 4096,
-        temperature: 0.2,
-        stream: true,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage },
-        ],
-      }),
+    const result = await geminiFlash.generateContentStream({
+      systemInstruction: systemPrompt,
+      contents: [{ role: "user", parts: [{ text: userMessage }] }],
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.error?.message ||
-          errorData.message ||
-          `API request failed: ${response.statusText}`
-      );
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error("Failed to get response reader");
-    }
-
-    const decoder = new TextDecoder();
     let fullText = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split("\n").filter((line) => line.startsWith("data: "));
-
-      for (const line of lines) {
-        const data = line.replace(/^data:\s*/, "");
-        if (data === "[DONE]") {
-          callbacks.onComplete?.(fullText);
-          return;
-        }
-        try {
-          const parsed = JSON.parse(data);
-          const delta = parsed.choices?.[0]?.delta?.content?.[0]?.text;
-          if (delta) {
-            fullText += delta;
-            callbacks.onToken?.(delta);
-          }
-        } catch (err) {
-          // ignore malformed lines
-        }
-      }
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      fullText += chunkText;
+      callbacks.onToken?.(chunkText);
     }
 
     callbacks.onComplete?.(fullText);
